@@ -97,7 +97,7 @@ historic_data_wo_names <- tag_df_split$historic %>%
 
 ## Save indiv groups as .rds -----
 ### Historic (complete) ----
-fname_historic <- here('data', 'processed', 'stretch_cc_prepped_ssm_data_historic_complete.rds')
+fname_historic <- here('data', 'processed', 'historic_cc_prepped_ssm_data_complete.rds')
 saveRDS(historic_data_wo_names, file = fname_historic)
 
 

@@ -1,0 +1,424 @@
+---
+title: "extract_env_for_ssms.Rmd"
+author: "Dana K Briscoe"
+date: "`r Sys.Date()`"
+output: html_document
+params: 
+    ncpath: "/Users/briscoedk/dbriscoe@stanford.edu - Google Drive/My Drive/ncdf/npac"
+    ftype: "rds"
+    # ftype: "csv"
+    dataset: stretch
+    # dataset: historic
+    # envs: !r c('sst_NOAA_DHW_monthly_Lon0360', 'multi-4km_P1M_CHL')
+    envs: !r c('hycom_uv')
+    lon_range: !r tibble::tibble(min=-180, max=-110)
+    # lon_range: 'NA'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load libraries
+library(tidyverse)
+library(here)
+```
+
+```{r}
+# source xtracto local source ---------------------------------
+# source('~/Dropbox/RESEARCH/CODES/R_codes/xtractomatic/Xtracto_Local_NPAC.R')   
+source('~/Dropbox/RESEARCH/CODES/R_codes/xtractomatic/Xtracto_Local_NPAC_STRETCH.R')   
+```
+
+```{r}
+# source Scripts -----
+source(here("R", "00_prep_cohort_data_helper_functions.R"))
+```
+
+```{r}
+# specifcy function: FYI, this is a modified function from orig XTRACTO LOCAL ----
+getDateRangeX <- function(inpts, ncIn){
+    parsedt <- vector(mode='character', length(ncIn))
+    for (j in 1:length(ncIn)){
+        nc <- ncIn[j]
+        parsename <- unlist(strsplit(nc,'_'))
+        parsedt[j] <- substr(parsename[abs(length(parsename))],1,10)
+    }
+    startD <- format(as.POSIXct(min(inpts$dt), tz='UTC'), '%Y-%m-%d')
+    print(paste('Ptsfile start', startD))
+    endD <- format(as.POSIXct(max(inpts$dt), tz='UTC'), '%Y-%m-%d')
+    print(paste('Ptsfile end', endD))
+    startfile <- which(abs(as.Date(parsedt)-as.Date(startD)) == min(abs(as.Date(parsedt)-as.Date(startD))))[1]-1
+    endfile <- which(abs(as.Date(endD)-as.Date(parsedt)) == min(abs(as.Date(endD)-as.Date(parsedt))))[1]
+    dtIn <- ncIn[startfile:endfile]
+}
+```
+
+
+## Load Data ----
+```{r}
+
+# Prep input data set
+tag_fpath <- file.path(here() %>% dirname(), 'cc-process-ssm', 'data', 'ssm_rw', params$dataset)
+
+if(params$ftype == 'csv'){
+
+    flist = list.files(tag_fpath, pattern = ".csv",full.names=T)
+    
+    # read in tags
+    tag_list <-
+        lapply(flist, function(i){
+            read.csv(i, header=TRUE)
+        })
+    
+    # convert to df 
+    tag_df = data.table::rbindlist(tag_list) %>%
+                as_tibble() %>%
+                mutate(dt = as.Date(date)) %>%
+                mutate(group = case_when(
+                date < ymd_hms('2023-01-01 00:00:00')  ~ "historic", 
+                date >= ymd_hms('2023-07-01 00:00:00') & 
+                    date < ymd_hms('2024-05-01 00:00:00') ~ "cohort1",
+                date >= ymd_hms('2024-07-01 00:00:00') ~ "cohort2",
+                TRUE ~ NA))
+
+} else if(params$ftype == "rds"){
+    
+    flist = 
+        list.files(here('data', 'processed'), 
+                  pattern=glue("{params$dataset}.*{params$ftype}"), full.names=T)
+       
+    tag_list <-
+        lapply(flist, function(i){
+            readRDS(i,)
+        })
+       
+    tag_df = data.table::rbindlist(tag_list) %>%
+                as_tibble() %>%
+                mutate(dt = as.Date(date))
+}
+```
+
+```{r}
+
+
+```
+
+```{r}
+# if(!is.na(params$lon_range[1])){
+# # prep for extracto by selecting lon range & rename
+# obsdata <- tag_df %>%
+#     filter(lon >=params$lon_range$min & lon <= params$lon_range$max) %>%
+#     mutate(lon = make360(lon))
+# } else {
+#     obsdata <- tag_df %>%
+#     mutate(lon = make360(lon))
+# }
+```
+
+```{r}
+# Rename for env extraction abstraction
+obsdata = tag_df |> 
+    mutate(month = month(date),
+           year = year(date)) |>
+    filter(month >= 9 & month <= 10)
+
+```
+
+
+
+<!-- ## PREP XTRACTO -->
+```{r}
+list.ncs <- list.files(params$ncpath, full.names=T, recursive = T)
+
+obsdata$X <- seq(1,nrow(obsdata))
+
+obsdata$dt <- as.POSIXct(paste(obsdata$date,'12:00:00'),tz='UTC')
+
+obsdata$dtime<-as.POSIXct(obsdata$date,origin="1970-01-01",tz='UTC')
+
+cat('obs date range:')
+range(obsdata$dtime |> as.Date())
+
+cat('\nobs lon range:')
+range(obsdata$lon)  
+
+```
+
+<!-- ## let's do this.... -->
+
+<!-- ## MONTHLYS ----------------------------------------------------------- -->
+
+
+```{r, include=FALSE}
+## monthly SST (Monthly SST Product is 0/360)
+
+if('sst_NOAA_DHW_monthly_Lon0360' %in% params$envs){
+    
+filenames<-grep("sst_NOAA_DHW_monthly_Lon0360",list.ncs, fixed = TRUE)  
+sstfiles<-list.ncs[filenames]
+varname<-"sea_surface_temperature";  mnradius<- 0.25; sdradius<- 1; alt<-1
+
+sstfilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstfiles) 
+
+sstmean <- rbindlist(lapply(sstfilesIn, FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius),fill=TRUE)
+                obsdata$sst_monthly_new_mean<-rep(NA, length(obsdata[,1])); 
+                obsdata$sst_monthly_new_mean_sd<-rep(NA, length(obsdata[,1]))
+           
+# obsdata$HiSST[sstmean$X]<-sstmean$SST_mean
+obsdata$sst_monthly_new_mean[sstmean$X]<-sstmean$sea_surface_temperature_mean
+obsdata$sst_monthly_new_mean_sd[sstmean$X]<-sstmean$sea_surface_temperature_sd
+
+# head(obsdata); tail(obsdata)
+# range(obsdata$sst_monthly_new_mean, na.rm=T)
+
+rm(sstmean); rm(sstfilesIn)
+
+}
+```
+
+
+```{r, hycom-uv}
+
+## Daily Hycom U, V Product is 0/360)
+
+if('hycom_uv' %in% params$envs){
+    
+obsdata$u_daily_new_mean<-rep(NA, length(obsdata[,1])); 
+obsdata$u_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
+
+obsdata$v_daily_new_mean<-rep(NA, length(obsdata[,1])); 
+obsdata$v_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
+
+
+varstring = c('GLBy0', 'ESPC-D-V02')
+# varstring = c('all_vars', 'water_u', 'water_v')
+
+    for(v in varstring){
+        hycomfiles <- list.files(params$ncpath, pattern = v, full.names=T, recursive = T) 
+
+        hycomfiles <- hycomfiles[order(basename(hycomfiles))]
+            
+        ## u --
+        if(v == "ESPC-D-V02") {
+            hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles) %>% .[grepl("u3z", .)]
+        } else {
+            hycomfilesIn <- getDateRangeX(inpts=obsdata, ncIn=hycomfiles) 
+        }
+        
+        varname<-"water_u";  mnradius<- 0.25; sdradius<- 1; alt<-1
+
+        
+        umean <- rbindlist(lapply(hycomfilesIn, FUN=getvar,varname=varname,
+                                  ptsfile=obsdata, pt.radius=mnradius),fill=TRUE)
+        
+        
+        obsdata$u_daily_new_mean[umean$X]<-umean$water_u_mean
+        obsdata$u_daily_new_mean_sd[umean$X]<-umean$water_u_sd
+        
+        rm(umean) 
+    
+        
+        ## v --
+        if(v == "ESPC-D-V02") {
+            hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles) %>% .[grepl("v3z", .)]
+        } else {
+            hycomfilesIn <- getDateRangeX(inpts=obsdata, ncIn=hycomfiles) 
+        }
+        
+        varname<-"water_v";  mnradius<- 0.25; sdradius<- 1; alt<-1
+        
+        vmean <- rbindlist(lapply(hycomfilesIn, FUN=getvar,varname=varname,
+                                  ptsfile=obsdata, pt.radius=mnradius),fill=TRUE)
+        
+        
+        obsdata$v_daily_new_mean[vmean$X]<-vmean$water_v_mean
+        obsdata$v_daily_new_mean_sd[vmean$X]<-vmean$water_v_sd
+        
+        rm(vmean)
+      
+        rm(hycomfilesIn)
+    }
+
+} # end if hycom_uv
+
+```
+
+```{r}
+#
+```
+
+
+```{r, prep-obsdata-for-chlx}
+# FYI all CHL PRODUCTS ARE -180/180
+obsdata <- obsdata %>%
+    mutate(lon = make180(lon))
+
+```
+
+
+```{r, globcolour-mday, warning=FALSE}
+
+# obsdata_test <- obsdata %>% filter(date >= '1997-09-01' & date < '1997-09-30')
+invisible(
+if('multi-4km_P1M_CHL' %in% params$envs){
+    
+    list.ncs <- list.files(params$ncpath, full.names=T)
+    filenames<-grep("multi-4km_P1M_CHL",list.ncs)
+
+    chlfiles<-list.ncs[filenames]
+    varname<-"CHL";  mnradius<- 1; sdradius<- 1; alt<-1
+    chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
+    globcolourmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,
+                                       ptsfile=obsdata,
+                                       # ptsfile=obsdata_test,
+                                       pt.radius=mnradius,alt=alt),fill=TRUE)
+    
+    obsdata$globcolour_new_mean<-rep(NA, length(obsdata[,1]))
+    obsdata$globcolour_new_mean[globcolourmean$X]<-globcolourmean$CHL_mean
+    
+    head(obsdata)
+    range(obsdata$globcolour_new_mean, na.rm=T)
+    
+    rm(globcolourmean); rm(chlfilesIn)
+
+}
+)
+```
+
+
+```{r, seawifs-mday}
+
+if('erdSW2018chlamday' %in% params$envs){
+    
+    list.ncs <- list.files(params$ncpath, full.names=T)
+    filenames<-grep("erdSW2018chlamday",list.ncs)
+
+    chlfiles<-list.ncs[filenames]
+    varname<-"chlorophyll";  mnradius<- 1; sdradius<- 1; alt<-1
+    chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
+    seawifsmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius,alt=alt),fill=TRUE)
+    
+    obsdata$seawifs_new_mean<-rep(NA, length(obsdata[,1]))
+    obsdata$seawifs_new_mean[seawifsmean$X]<-seawifsmean$chlorophyll_mean
+    
+    head(obsdata)
+    range(obsdata$seawifs_new_mean, na.rm=T)
+    
+    rm(seawifsmean); rm(chlfilesIn)
+
+}
+
+
+```
+
+```{r, modis-mday}
+
+if('erdMH1chlamday' %in% params$envs){
+
+chl_product = "erdMH1chlamday"
+
+list.ncs <- list.files(params$ncpath, full.names=T)
+
+filenames<-grep("erdMH1chlamday",list.ncs)
+chlfiles<-list.ncs[filenames]
+varname<-"chlorophyll";  mnradius<- 1; sdradius<- 1; alt<-1
+chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
+modismean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius,alt=alt),fill=TRUE)
+
+obsdata$modis_new_mean<-rep(NA, length(obsdata[,1]))
+obsdata$modis_new_mean[modismean$X]<-modismean$chlorophyll_mean
+
+head(obsdata)
+range(obsdata$modis_new_mean, na.rm=T)
+
+rm(modismean); rm(chlfilesIn)
+
+}
+
+```
+
+```{r, viirs-mday}
+
+if('nesdisVHNSQchlaMonthly_' %in% params$envs){
+
+filenames<-grep("nesdisVHNSQchlaMonthly_",list.ncs)
+
+chlfiles<-list.ncs[filenames]
+varname<-"chlor_a";  mnradius<- 0.25; sdradius<- 1; alt<-1
+chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
+viirsmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius,alt=alt),fill=TRUE)
+
+obsdata$viirs_new_mean<-rep(NA, length(obsdata[,1]))
+obsdata$viirs_new_mean[viirsmean$X]<-viirsmean$chlor_a_mean
+
+head(obsdata)
+range(obsdata$viirs_new_mean, na.rm=T)
+
+rm(viirsmean); rm(chlfilesIn)
+
+}
+```
+
+```{r}
+print('% data missing: ')
+
+(colMeans(is.na(obsdata)))*100
+```
+
+```{r, fill-chlmday-gaps}
+
+
+
+if('seawifs_new_mean' %in% names(obsdata) & 'modis_new_mean' %in% names(obsdata) & 'seawifs_new_mean' %in% names(obsdata)){
+    ## Assign new chl col var to hold merged products
+    obsdata$chl_mean <- as.numeric(obsdata$modis_new_mean)    
+    
+    for (x in 1:dim(obsdata)[1]){
+        if (is.na(obsdata$chl_mean[x])) {obsdata$chl_mean[x] <- obsdata$seawifs_new_mean[x]} # merge modis + seawifs
+    }
+
+    for (x in 1:dim(obsdata)[1]){
+        if (is.na(obsdata$chl_mean[x])) {obsdata$chl_mean[x] <- obsdata$viirs_new_mean[x]}   # merge modis + seawifs + viirs
+    }
+} else if('globcolour_new_mean' %in% names(obsdata)){
+    
+    obsdata$chl_mean <- as.numeric(obsdata$globcolour_new_mean) 
+}  
+
+## Re-check % gappiness
+(length(which(is.na(obsdata$chl_mean)))/nrow(obsdata))*100  ## 23.9% missing - bledno chl; [1] 3.332511$ missing glob colour
+
+na_by_cols <- lapply(obsdata, function(x) sum(is.na(x)))
+
+(na_by_cols$chl_mean / nrow(obsdata)) * 100
+
+```
+
+```{r}
+# cross check all rows - run in console
+# skimr::skim(obsdata)
+
+```
+
+
+```{r}
+# Important Interim Step before saving: Return lons to 0 to 360
+if(min(obsdata$lon) < 0){
+    obsdata <- obsdata %>%
+        mutate(lon = make360(lon))
+}
+
+```
+
+
+```{r}
+# fname = glue::glue("indiv_tags_df_sept1997_mar2024_180_140W_xtracted_env_ms", ,".rds")
+
+fname = glue::glue("{params$dataset}_xtracted_{params$envs}_{Sys.Date()}.rds")
+saveRDS(obsdata, file = file.path(here() %>% dirname(), 'cc-stretch-dynamic-tch',
+                                  'data', 'processed', fname))
+
+```
+

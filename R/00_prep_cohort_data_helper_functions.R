@@ -84,3 +84,25 @@ load_metadata_xls <- function(meta_files){
     return(ret)
 }    
 
+
+
+# make180
+make180 <- function(lon){
+    isnot360<-min(lon)<0
+    if (!isnot360) {
+        ind<-which(lon>180)
+        lon[ind]<-lon[ind]-360
+    }
+    return(lon)
+}
+
+# make360
+make360 <- function(lon){
+    isnot360<-min(lon)<0
+    if(isnot360){
+        ind<-which(lon<0)
+        lon[ind]<-lon[ind]+360
+    }
+    return(lon)
+}
+
