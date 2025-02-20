@@ -1,6 +1,18 @@
 # R functions
 ## Source functions ----
 
+# add year month day to df
+add_ymd <- function(df) {
+    if(!is.Date(df$dt[1]))
+        stop('dt is not a date')
+    
+    ret = df %>%
+        tidyr::separate(., dt, c('year', 'month', 'day'), sep = "-",remove = FALSE) %>%
+        mutate_at(c("year", "month", "day"), as.numeric)
+    return(ret)
+}
+
+
 ## assign metadata
 assign_metadata <- function(f){
     

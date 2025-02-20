@@ -76,12 +76,12 @@ metadata_flist = list.files(file.path(
 
 #### Cohort 1 -----
 cohort1_data_w_names <- tag_df_split$cohort1 %>%
-    attach_metadata(., assign_metadata(f = metadata_flist[grepl("2023", metadata_flist)]))
+    attach_metadata(., assign_metadata(f = metadata_flist[grepl("2023", metadata_flist)])) %>% add_ymd()
 
 
 #### Cohort 2 -----
 cohort2_data_w_names <- tag_df_split$cohort2 %>%
-    attach_metadata(., assign_metadata(f = metadata_flist[grepl("2024", metadata_flist)]))
+    attach_metadata(., assign_metadata(f = metadata_flist[grepl("2024", metadata_flist)])) %>% add_ymd()
 
 
 #### Cohorts 3 & 4 .....
@@ -91,7 +91,7 @@ cohort2_data_w_names <- tag_df_split$cohort2 %>%
 # (do just for df consistency). have to run cohorts first in order to select same col names
 historic_data_wo_names <- tag_df_split$historic %>%
     left_join(., pull_historic_metadata(), by = "id", relationship = "many-to-many") %>%
-    dplyr::select(any_of(names(cohort1_data_w_names)))
+    dplyr::select(any_of(names(cohort1_data_w_names))) %>% add_ymd()
 
 
 
