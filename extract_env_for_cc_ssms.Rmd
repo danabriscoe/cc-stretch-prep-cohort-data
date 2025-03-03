@@ -4,13 +4,13 @@ author: "Dana K Briscoe"
 date: "`r Sys.Date()`"
 output: html_document
 params: 
-    ncpath: "/Users/briscoedk/dbriscoe@stanford.edu - Google Drive/My Drive/ncdf/npac"
+    ncpath: "/Users/briscoedk/dbriscoe@stanford.edu - Google Drive/My Drive/ncdf/"
     ftype: "rds"
     # ftype: "csv"
     dataset: stretch
     # dataset: historic
     # envs: !r c('sst_NOAA_DHW_monthly_Lon0360', 'multi-4km_P1M_CHL')
-    envs: !r c('hycom_uv')
+    envs: !r c('hycom_uv', 'dhw_5km')
     lon_range: !r tibble::tibble(min=-180, max=-110)
     # lon_range: 'NA'
 ---
@@ -55,8 +55,8 @@ getDateRangeX <- function(inpts, ncIn){
 }
 ```
 
-
 ## Load Data ----
+
 ```{r}
 
 # Prep input data set
@@ -101,11 +101,6 @@ if(params$ftype == 'csv'){
 ```
 
 ```{r}
-
-
-```
-
-```{r}
 # if(!is.na(params$lon_range[1])){
 # # prep for extracto by selecting lon range & rename
 # obsdata <- tag_df %>%
@@ -121,14 +116,14 @@ if(params$ftype == 'csv'){
 # Rename for env extraction abstraction
 obsdata = tag_df |> 
     mutate(month = month(date),
-           year = year(date)) |>
-    filter(month >= 9 & month <= 10)
+           year = year(date)) #|>
+    # filter(month >= 9 & month <dhw_5km= 10)
+    # filter(year == 2025)
 
 ```
 
-
-
 <!-- ## PREP XTRACTO -->
+
 ```{r}
 list.ncs <- list.files(params$ncpath, full.names=T, recursive = T)
 
@@ -149,7 +144,6 @@ range(obsdata$lon)
 <!-- ## let's do this.... -->
 
 <!-- ## MONTHLYS ----------------------------------------------------------- -->
-
 
 ```{r, include=FALSE}
 ## monthly SST (Monthly SST Product is 0/360)
@@ -178,12 +172,71 @@ rm(sstmean); rm(sstfilesIn)
 }
 ```
 
+```{r}
+## daily SST (daily SST Product is -180/180)
+
+if('dhw_5km' %in% params$envs){
+    
+filenames<-grep("sst_dhw_5km",list.ncs, fixed = TRUE)  
+sstfiles<-list.ncs[filenames]
+varname<-"CRW_SST";  mnradius<- 0.25; sdradius<- 1; alt<-1
+
+sstfilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstfiles) 
+
+sstmean <- rbindlist(lapply(sstfilesIn, FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius),fill=TRUE)
+                obsdata$sst_daily_new_mean<-rep(NA, length(obsdata[,1])); 
+                obsdata$sst_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
+           
+# obsdata$HiSST[sstmean$X]<-sstmean$SST_mean
+obsdata$sst_daily_new_mean[sstmean$X]<-sstmean$CRW_SST_mean
+obsdata$sst_daily_new_mean_sd[sstmean$X]<-sstmean$CRW_SST_sd
+
+# head(obsdata); tail(obsdata)
+# range(obsdata$sst_daily_new_mean, na.rm=T)
+
+rm(sstmean); rm(sstfilesIn)
+
+}
+```
+
+```{r}
+
+## daily SST (daily SST Product is -180/180)
+
+if('dhw_5km' %in% params$envs){
+    
+filenames<-grep("ssta_dhw_5km",list.ncs, fixed = TRUE)  
+sstafiles<-list.ncs[filenames]
+varname<-"CRW_SSTANOMALY";  mnradius<- 0.25; sdradius<- 1; alt<-1
+
+sstafilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstafiles) 
+
+sstamean <- rbindlist(lapply(sstafilesIn, FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius),fill=TRUE)
+                obsdata$ssta_daily_new_mean<-rep(NA, length(obsdata[,1])); 
+                obsdata$ssta_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
+           
+# obsdata$HiSST[sstmean$X]<-sstmean$SST_mean
+obsdata$ssta_daily_new_mean[sstamean$X]<-sstamean$CRW_SSTANOMALY_mean
+obsdata$ssta_daily_new_mean_sd[sstamean$X]<-sstamean$CRW_SSTANOMALY_sd
+
+# head(obsdata); tail(obsdata)
+# range(obsdata$sst_monthly_new_mean, na.rm=T)
+
+rm(sstamean); rm(sstafilesIn)
+
+}
+
+```
 
 ```{r, hycom-uv}
 
 ## Daily Hycom U, V Product is 0/360)
 
 if('hycom_uv' %in% params$envs){
+    
+obsdata <- obsdata %>%
+    mutate(lon = make360(lon))
+
     
 obsdata$u_daily_new_mean<-rep(NA, length(obsdata[,1])); 
 obsdata$u_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
@@ -241,6 +294,10 @@ varstring = c('GLBy0', 'ESPC-D-V02')
         rm(hycomfilesIn)
     }
 
+obsdata <- obsdata %>%
+    mutate(lon = make180(lon))
+
+
 } # end if hycom_uv
 
 ```
@@ -249,14 +306,12 @@ varstring = c('GLBy0', 'ESPC-D-V02')
 #
 ```
 
-
 ```{r, prep-obsdata-for-chlx}
 # FYI all CHL PRODUCTS ARE -180/180
 obsdata <- obsdata %>%
     mutate(lon = make180(lon))
 
 ```
-
 
 ```{r, globcolour-mday, warning=FALSE}
 
@@ -286,7 +341,6 @@ if('multi-4km_P1M_CHL' %in% params$envs){
 }
 )
 ```
-
 
 ```{r, seawifs-mday}
 
@@ -402,7 +456,6 @@ na_by_cols <- lapply(obsdata, function(x) sum(is.na(x)))
 
 ```
 
-
 ```{r}
 # Important Interim Step before saving: Return lons to 0 to 360
 if(min(obsdata$lon) < 0){
@@ -412,13 +465,12 @@ if(min(obsdata$lon) < 0){
 
 ```
 
-
 ```{r}
 # fname = glue::glue("indiv_tags_df_sept1997_mar2024_180_140W_xtracted_env_ms", ,".rds")
 
-fname = glue::glue("{params$dataset}_xtracted_{params$envs}_{Sys.Date()}.rds")
+# fname = glue::glue("{params$dataset}_xtracted_{params$envs}_{Sys.Date()}.rds")
+fname = glue::glue("{params$dataset}_xtracted_envs_{Sys.Date()}.rds")
 saveRDS(obsdata, file = file.path(here() %>% dirname(), 'cc-stretch-dynamic-tch',
                                   'data', 'processed', fname))
 
 ```
-
