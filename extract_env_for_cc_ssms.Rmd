@@ -22,6 +22,7 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 # load libraries
 library(tidyverse)
+library(glue)
 library(here)
 ```
 
@@ -255,7 +256,8 @@ varstring = c('GLBy0', 'ESPC-D-V02')
             
         ## u --
         if(v == "ESPC-D-V02") {
-            hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles) %>% .[grepl("u3z", .)]
+            hycomfiles_u = hycomfiles %>% .[grepl("u3z", .)]
+            hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles_u) #%>% .[grepl("u3z", .)]
         } else {
             hycomfilesIn <- getDateRangeX(inpts=obsdata, ncIn=hycomfiles) 
         }
@@ -275,7 +277,8 @@ varstring = c('GLBy0', 'ESPC-D-V02')
         
         ## v --
         if(v == "ESPC-D-V02") {
-            hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles) %>% .[grepl("v3z", .)]
+            hycomfiles_v = hycomfiles %>% .[grepl("v3z", .)]
+            hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles_v) #%>% .[grepl("v3z", .)]
         } else {
             hycomfilesIn <- getDateRangeX(inpts=obsdata, ncIn=hycomfiles) 
         }
