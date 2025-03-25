@@ -50,5 +50,6 @@ rsconnect/
 
 
 # Manual additions (dkb)
+.DS_Store
 data/
 utils/
