@@ -4,13 +4,14 @@ author: "Dana K Briscoe"
 date: "`r Sys.Date()`"
 output: html_document
 params: 
-    ncpath: "/Users/briscoedk/dbriscoe@stanford.edu - Google Drive/My Drive/ncdf/"
+    ncpath: "/Users/briscoedk/dbriscoe@stanford.edu - Google Drive/My Drive/ncdf"
     ftype: "rds"
     # ftype: "csv"
     dataset: stretch
     # dataset: historic
     # envs: !r c('sst_NOAA_DHW_monthly_Lon0360', 'multi-4km_P1M_CHL')
-    envs: !r c('hycom_uv', 'dhw_5km')
+    # envs: !r c('hycom_uv', 'dhw_5km')
+    envs: !r c('globtotal', 'hycom_uv', 'dhw_5km', 'multi-4km_P1M_CHL')
     lon_range: !r tibble::tibble(min=-180, max=-110)
     # lon_range: 'NA'
 ---
@@ -56,7 +57,7 @@ getDateRangeX <- function(inpts, ncIn){
 }
 ```
 
-## Load Data ----
+## LOAD DATA ----
 
 ```{r}
 
@@ -101,17 +102,6 @@ if(params$ftype == 'csv'){
 }
 ```
 
-```{r}
-# if(!is.na(params$lon_range[1])){
-# # prep for extracto by selecting lon range & rename
-# obsdata <- tag_df %>%
-#     filter(lon >=params$lon_range$min & lon <= params$lon_range$max) %>%
-#     mutate(lon = make360(lon))
-# } else {
-#     obsdata <- tag_df %>%
-#     mutate(lon = make360(lon))
-# }
-```
 
 ```{r}
 # Rename for env extraction abstraction
@@ -123,7 +113,7 @@ obsdata = tag_df |>
 
 ```
 
-<!-- ## PREP XTRACTO -->
+# LIST NETCDFs -----
 
 ```{r}
 list.ncs <- list.files(params$ncpath, full.names=T, recursive = T)
@@ -145,159 +135,214 @@ range(obsdata$lon)
 <!-- ## let's do this.... -->
 
 <!-- ## MONTHLYS ----------------------------------------------------------- -->
+# 1. SST ----
 
+### SST | Monthly (Coral Reef Watch)
 ```{r, include=FALSE}
-## monthly SST (Monthly SST Product is 0/360)
+## CRW SST (Monthly, 5km spatial res). Product is 0/360)
 
 if('sst_NOAA_DHW_monthly_Lon0360' %in% params$envs){
     
-filenames<-grep("sst_NOAA_DHW_monthly_Lon0360",list.ncs, fixed = TRUE)  
-sstfiles<-list.ncs[filenames]
-varname<-"sea_surface_temperature";  mnradius<- 0.25; sdradius<- 1; alt<-1
-
-sstfilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstfiles) 
-
-sstmean <- rbindlist(lapply(sstfilesIn, FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius),fill=TRUE)
-                obsdata$sst_monthly_new_mean<-rep(NA, length(obsdata[,1])); 
-                obsdata$sst_monthly_new_mean_sd<-rep(NA, length(obsdata[,1]))
-           
-# obsdata$HiSST[sstmean$X]<-sstmean$SST_mean
-obsdata$sst_monthly_new_mean[sstmean$X]<-sstmean$sea_surface_temperature_mean
-obsdata$sst_monthly_new_mean_sd[sstmean$X]<-sstmean$sea_surface_temperature_sd
-
-# head(obsdata); tail(obsdata)
-# range(obsdata$sst_monthly_new_mean, na.rm=T)
-
-rm(sstmean); rm(sstfilesIn)
+    # make lon 360
+    obsdata <- obsdata %>%
+    mutate(lon = make360(lon))
+    
+    # get file names
+    filenames<-grep("sst_NOAA_DHW_monthly_Lon0360",list.ncs, fixed = TRUE)  
+    sstfiles<-list.ncs[filenames]
+    varname<-"sea_surface_temperature";  mnradius<- 0.25; sdradius<- 1; alt<-1
+    
+    sstfilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstfiles) 
+    
+    # extract 
+    sstmean <- rbindlist(lapply(sstfilesIn,
+                        FUN=getvar,varname=varname,
+                        ptsfile=obsdata,pt.radius=mnradius),
+                        fill=TRUE)
+    
+    # add to obsdata
+    obsdata$sst_monthly_new_mean<-rep(NA, length(obsdata[,1])); 
+    obsdata$sst_monthly_new_mean_sd<-rep(NA, length(obsdata[,1]))
+               
+    obsdata$sst_monthly_new_mean[sstmean$X]<-sstmean$sea_surface_temperature_mean
+    obsdata$sst_monthly_new_mean_sd[sstmean$X]<-sstmean$sea_surface_temperature_sd
+    
+    # preview results
+    head(obsdata); tail(obsdata)
+    range(obsdata$sst_monthly_new_mean, na.rm=T)
+    
+    # clean ws
+    rm(sstmean); rm(sstfilesIn)
+    
+    # return back to -180/180
+    obsdata <- obsdata %>%
+    mutate(lon = make180(lon))
 
 }
 ```
 
+
+### SST | Daily (Coral Reef Watch)
 ```{r}
-## daily SST (daily SST Product is -180/180)
+## CRW DHW SST (Daily, 5km spatial res). Product is -180/180)
 
 if('dhw_5km' %in% params$envs){
     
-filenames<-grep("sst_dhw_5km",list.ncs, fixed = TRUE)  
-sstfiles<-list.ncs[filenames]
-varname<-"CRW_SST";  mnradius<- 0.25; sdradius<- 1; alt<-1
+    # get file names
+    filenames<-grep("sst_dhw_5km",list.ncs, fixed = TRUE)  
+    sstfiles<-list.ncs[filenames]
+    varname<-"CRW_SST";  mnradius<- 0.25; sdradius<- 1; alt<-1
+    
+    sstfilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstfiles) 
+    
+    # extract 
+    sstmean <- rbindlist(lapply(sstfilesIn,
+                        FUN=getvar,varname=varname,
+                        ptsfile=obsdata,pt.radius=mnradius),
+                        fill=TRUE)
+    
+    # add to obsdata
+    obsdata$sst_daily_new_mean<-rep(NA, length(obsdata[,1])); 
+    obsdata$sst_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
+               
+    obsdata$sst_daily_new_mean[sstmean$X]<-sstmean$CRW_SST_mean
+    obsdata$sst_daily_new_mean_sd[sstmean$X]<-sstmean$CRW_SST_sd
 
-sstfilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstfiles) 
-
-sstmean <- rbindlist(lapply(sstfilesIn, FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius),fill=TRUE)
-                obsdata$sst_daily_new_mean<-rep(NA, length(obsdata[,1])); 
-                obsdata$sst_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
-           
-# obsdata$HiSST[sstmean$X]<-sstmean$SST_mean
-obsdata$sst_daily_new_mean[sstmean$X]<-sstmean$CRW_SST_mean
-obsdata$sst_daily_new_mean_sd[sstmean$X]<-sstmean$CRW_SST_sd
-
-# head(obsdata); tail(obsdata)
-# range(obsdata$sst_daily_new_mean, na.rm=T)
-
-rm(sstmean); rm(sstfilesIn)
+    # preview results    
+    head(obsdata); tail(obsdata)
+    range(obsdata$sst_daily_new_mean, na.rm=T)
+    
+    # clean ws
+    rm(sstmean); rm(sstfilesIn)
 
 }
 ```
 
+
+### SSTA | Daily (Coral Reef Watch)
 ```{r}
 
-## daily SST (daily SST Product is -180/180)
+## CRW DHW SST (Daily, 5km spatial res). Product is -180/180)
 
 if('dhw_5km' %in% params$envs){
     
-filenames<-grep("ssta_dhw_5km",list.ncs, fixed = TRUE)  
-sstafiles<-list.ncs[filenames]
-varname<-"CRW_SSTANOMALY";  mnradius<- 0.25; sdradius<- 1; alt<-1
-
-sstafilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstafiles) 
-
-sstamean <- rbindlist(lapply(sstafilesIn, FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius),fill=TRUE)
-                obsdata$ssta_daily_new_mean<-rep(NA, length(obsdata[,1])); 
-                obsdata$ssta_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
-           
-# obsdata$HiSST[sstmean$X]<-sstmean$SST_mean
-obsdata$ssta_daily_new_mean[sstamean$X]<-sstamean$CRW_SSTANOMALY_mean
-obsdata$ssta_daily_new_mean_sd[sstamean$X]<-sstamean$CRW_SSTANOMALY_sd
-
-# head(obsdata); tail(obsdata)
-# range(obsdata$sst_monthly_new_mean, na.rm=T)
-
-rm(sstamean); rm(sstafilesIn)
+    # get file names
+    filenames<-grep("ssta_dhw_5km",list.ncs, fixed = TRUE)  
+    sstafiles<-list.ncs[filenames]
+    varname<-"CRW_SSTANOMALY";  mnradius<- 0.25; sdradius<- 1; alt<-1
+    
+    sstafilesIn <- getDateRangeX(inpts=obsdata,ncIn=sstafiles) 
+    
+    # extract 
+    sstamean <- rbindlist(lapply(sstafilesIn,
+                        FUN=getvar,varname=varname,
+                        ptsfile=obsdata,pt.radius=mnradius),
+                        fill=TRUE)
+    
+    # add to obsdata
+    obsdata$ssta_daily_new_mean<-rep(NA, length(obsdata[,1])); 
+    obsdata$ssta_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
+               
+    obsdata$ssta_daily_new_mean[sstamean$X]<-sstamean$CRW_SSTANOMALY_mean
+    obsdata$ssta_daily_new_mean_sd[sstamean$X]<-sstamean$CRW_SSTANOMALY_sd
+    
+    # preview results    
+    head(obsdata); tail(obsdata)
+    range(obsdata$ssta_daily_new_mean, na.rm=T)
+    
+    # clean ws
+    rm(sstamean); rm(sstafilesIn)
 
 }
 
 ```
 
+# 2. CURRENTS ----
+
+### HYCOM | Daily
 ```{r, hycom-uv}
 
 ## Daily Hycom U, V Product is 0/360)
 
 if('hycom_uv' %in% params$envs){
     
-obsdata <- obsdata %>%
+    # make lon 360
+    obsdata <- obsdata %>%
     mutate(lon = make360(lon))
+    
+    # set up empty cols    
+    obsdata$hycom_u_daily_new_mean<-rep(NA, length(obsdata[,1])); 
+    obsdata$hycom_u_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
+    
+    obsdata$hycom_v_daily_new_mean<-rep(NA, length(obsdata[,1])); 
+    obsdata$hycom_v_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
+    
+    # varnames to extract
+    varstring = c('GLBy0', 'ESPC-D-V02')
 
     
-obsdata$u_daily_new_mean<-rep(NA, length(obsdata[,1])); 
-obsdata$u_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
-
-obsdata$v_daily_new_mean<-rep(NA, length(obsdata[,1])); 
-obsdata$v_daily_new_mean_sd<-rep(NA, length(obsdata[,1]))
-
-
-varstring = c('GLBy0', 'ESPC-D-V02')
-# varstring = c('all_vars', 'water_u', 'water_v')
-
-    for(v in varstring){
-        hycomfiles <- list.files(params$ncpath, pattern = v, full.names=T, recursive = T) 
-
-        hycomfiles <- hycomfiles[order(basename(hycomfiles))]
+        for(v in varstring){
+           # get file names
+            hycomfiles <- list.files(params$ncpath, pattern = v, full.names=T, recursive = T) 
+            hycomfiles <- hycomfiles[order(basename(hycomfiles))]
+                
+            ## u --
+            if(v == "ESPC-D-V02") {
+                hycomfiles_u = hycomfiles %>% .[grepl("u3z", .)]
+                hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles_u) 
+            } else {
+                hycomfilesIn <- getDateRangeX(inpts=obsdata, ncIn=hycomfiles) 
+            }
             
-        ## u --
-        if(v == "ESPC-D-V02") {
-            hycomfiles_u = hycomfiles %>% .[grepl("u3z", .)]
-            hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles_u) #%>% .[grepl("u3z", .)]
-        } else {
-            hycomfilesIn <- getDateRangeX(inpts=obsdata, ncIn=hycomfiles) 
-        }
-        
-        varname<-"water_u";  mnradius<- 0.25; sdradius<- 1; alt<-1
-
-        
-        umean <- rbindlist(lapply(hycomfilesIn, FUN=getvar,varname=varname,
-                                  ptsfile=obsdata, pt.radius=mnradius),fill=TRUE)
-        
-        
-        obsdata$u_daily_new_mean[umean$X]<-umean$water_u_mean
-        obsdata$u_daily_new_mean_sd[umean$X]<-umean$water_u_sd
-        
-        rm(umean) 
+            varname<-"water_u";  mnradius<- 0.25; sdradius<- 1; alt<-1
     
+            # extract 
+            umean <- rbindlist(lapply(hycomfilesIn, FUN=getvar,varname=varname,
+                                      ptsfile=obsdata, pt.radius=mnradius),
+                                      fill=TRUE)
+            
+            # add to obsdata
+            obsdata$hycom_u_daily_new_mean[umean$X]<-umean$water_u_mean
+            obsdata$hycom_u_daily_new_mean_sd[umean$X]<-umean$water_u_sd
+            
+            # clean ws
+            rm(umean) 
         
-        ## v --
-        if(v == "ESPC-D-V02") {
-            hycomfiles_v = hycomfiles %>% .[grepl("v3z", .)]
-            hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles_v) #%>% .[grepl("v3z", .)]
-        } else {
-            hycomfilesIn <- getDateRangeX(inpts=obsdata, ncIn=hycomfiles) 
-        }
+            
+            ## v --
+            if(v == "ESPC-D-V02") {
+                hycomfiles_v = hycomfiles %>% .[grepl("v3z", .)]
+                hycomfilesIn = getDateRangeX(inpts=obsdata, ncIn=hycomfiles_v) 
+            } else {
+                hycomfilesIn <- getDateRangeX(inpts=obsdata, ncIn=hycomfiles) 
+            }
         
-        varname<-"water_v";  mnradius<- 0.25; sdradius<- 1; alt<-1
-        
-        vmean <- rbindlist(lapply(hycomfilesIn, FUN=getvar,varname=varname,
-                                  ptsfile=obsdata, pt.radius=mnradius),fill=TRUE)
-        
-        
-        obsdata$v_daily_new_mean[vmean$X]<-vmean$water_v_mean
-        obsdata$v_daily_new_mean_sd[vmean$X]<-vmean$water_v_sd
-        
-        rm(vmean)
-      
-        rm(hycomfilesIn)
-    }
+            varname<-"water_v";  mnradius<- 0.25; sdradius<- 1; alt<-1
+            
+            # extract 
+            vmean <- rbindlist(lapply(hycomfilesIn, FUN=getvar,varname=varname,
+                                      ptsfile=obsdata, pt.radius=mnradius),
+                                      fill=TRUE)
+            
+            # add to obsdata
+            obsdata$hycom_v_daily_new_mean[vmean$X]<-vmean$water_v_mean
+            obsdata$hycom_v_daily_new_mean_sd[vmean$X]<-vmean$water_v_sd
+            
+            # clean ws
+            rm(vmean)
+          
+            rm(hycomfilesIn, hycomfiles)
+            
+        } # end for varstring 
+    
 
-obsdata <- obsdata %>%
+   # preview results  
+    head(obsdata)
+    range(obsdata$hycom_u_daily_new_mean, na.rm=T)
+    range(obsdata$hycom_v_daily_new_mean, na.rm=T)
+    
+    # return back to -180/180
+    obsdata <- obsdata %>%
     mutate(lon = make180(lon))
 
 
@@ -305,64 +350,143 @@ obsdata <- obsdata %>%
 
 ```
 
-```{r}
-#
+
+### GlobTotal | Daily (u,v)
+```{r, globtotal}
+
+# Copernicus global total ocean current (incl ekman & geostrophic components; daily, 0.25 x 0.25 degree spatial res). Product in -180/180
+
+
+if('globtotal' %in% params$envs){
+    
+    # get file names
+    filenames<-grep("cmems_obs-mob_glo_phy-cur_my_0.25deg_P1D-m",list.ncs)
+
+    globtotalfiles<-list.ncs[filenames]
+
+    varnames = c('uo', 'vo')
+    mnradius<- 1; sdradius<- 1; alt<-1
+    
+    globtotalfilesIn <- getDateRangeX(inpts=obsdata,ncIn=globtotalfiles)
+    
+    # extract 
+    ## uo ---
+    globtotal_uo_mean <- rbindlist(lapply(globtotalfilesIn,FUN=getvar,varname=varnames[1],
+                                       ptsfile=obsdata,
+                                       pt.radius=mnradius,alt=alt),
+                                       fill=TRUE)
+    
+    # add to obsdata    
+    obsdata$globtotal_uo_new_mean<-rep(NA, length(obsdata[,1]))
+    obsdata$globtotal_uo_new_mean[globtotal_uo_mean$X]<-globtotal_uo_mean$uo_mean
+    
+    
+    ## vo ---
+    globtotal_vo_mean <- rbindlist(lapply(globtotalfilesIn,FUN=getvar,varname=varnames[2],
+                                       ptsfile=obsdata,
+                                       pt.radius=mnradius,alt=alt),
+                                       fill=TRUE)
+    
+    
+    # add to obsdata
+    obsdata$globtotal_vo_new_mean<-rep(NA, length(obsdata[,1]))
+    obsdata$globtotal_vo_new_mean[globtotal_vo_mean$X]<-globtotal_vo_mean$vo_mean
+    
+   # preview results  
+    head(obsdata)
+    range(obsdata$globtotal_uo_new_mean, na.rm=T)
+    range(obsdata$globtotal_vo_new_mean, na.rm=T)
+    
+    # clean ws
+    rm(globtotal_uo_mean, globtotal_vo_mean); rm(globtotalfilesIn)
+
+}
+
 ```
 
 ```{r, prep-obsdata-for-chlx}
-# FYI all CHL PRODUCTS ARE -180/180
-obsdata <- obsdata %>%
-    mutate(lon = make180(lon))
+# # FYI all CHL PRODUCTS ARE -180/180
+# obsdata <- obsdata %>%
+#     mutate(lon = make180(lon))
 
 ```
 
+# 3. CHLA ----
+
+### GlobColour | Monthly
 ```{r, globcolour-mday, warning=FALSE}
 
-# obsdata_test <- obsdata %>% filter(date >= '1997-09-01' & date < '1997-09-30')
+# Copernicus Global Ocean Colour (Monthly, 4km spatial res). Product in -180/180
+
 invisible(
 if('multi-4km_P1M_CHL' %in% params$envs){
     
-    list.ncs <- list.files(params$ncpath, full.names=T)
-    filenames<-grep("multi-4km_P1M_CHL",list.ncs)
+    # get file names - note specis subfolder 
+    globcolour_list.ncs <- list.files(str_c(params$ncpath,
+                                            '/npac/cmems_globcolour_expanded_lats'), 
+                                            full.names=T, recursive = T)
+    
+    # get file names
+    filenames<-grep("multi-4km_P1M_CHL",globcolour_list.ncs)
+    filenames<-grep("cmems_obs-oc_glo_bgc-plankton_my_l4-multi-4km_P1M_CHL",
+                     globcolour_list.ncs)
 
-    chlfiles<-list.ncs[filenames]
+    chlfiles<-globcolour_list.ncs[filenames]
+    
     varname<-"CHL";  mnradius<- 1; sdradius<- 1; alt<-1
     chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
+    
+    # extract 
     globcolourmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,
                                        ptsfile=obsdata,
-                                       # ptsfile=obsdata_test,
-                                       pt.radius=mnradius,alt=alt),fill=TRUE)
+                                       pt.radius=mnradius,alt=alt),
+                                       fill=TRUE)
     
+    # add to obsdata
     obsdata$globcolour_new_mean<-rep(NA, length(obsdata[,1]))
     obsdata$globcolour_new_mean[globcolourmean$X]<-globcolourmean$CHL_mean
     
+    # preview results
     head(obsdata)
     range(obsdata$globcolour_new_mean, na.rm=T)
     
+    # clean ws
     rm(globcolourmean); rm(chlfilesIn)
 
 }
 )
 ```
 
+
+### SEAWiFS | Monthly 
 ```{r, seawifs-mday}
+
+# Seawifs Chl-a (Monthly from 9/1997 - 12/2003, 0.1 degree spatial res). Product in -180/180
 
 if('erdSW2018chlamday' %in% params$envs){
     
-    list.ncs <- list.files(params$ncpath, full.names=T)
+    # get file names
     filenames<-grep("erdSW2018chlamday",list.ncs)
 
     chlfiles<-list.ncs[filenames]
+    
     varname<-"chlorophyll";  mnradius<- 1; sdradius<- 1; alt<-1
     chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
-    seawifsmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius,alt=alt),fill=TRUE)
     
+    # extract 
+    seawifsmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,
+                                    ptsfile=obsdata,pt.radius=mnradius,alt=alt),
+                                    fill=TRUE)
+    
+    # add to obsdata
     obsdata$seawifs_new_mean<-rep(NA, length(obsdata[,1]))
     obsdata$seawifs_new_mean[seawifsmean$X]<-seawifsmean$chlorophyll_mean
     
+    # preview results
     head(obsdata)
     range(obsdata$seawifs_new_mean, na.rm=T)
     
+    # clean ws
     rm(seawifsmean); rm(chlfilesIn)
 
 }
@@ -370,60 +494,85 @@ if('erdSW2018chlamday' %in% params$envs){
 
 ```
 
+
+### MODIS | Monthly
 ```{r, modis-mday}
+
+# MODIS Chl-a (Monthly from 1/2004 - 5/2022, 4km spatial res). Product in -180/180
 
 if('erdMH1chlamday' %in% params$envs){
 
-chl_product = "erdMH1chlamday"
-
-list.ncs <- list.files(params$ncpath, full.names=T)
-
-filenames<-grep("erdMH1chlamday",list.ncs)
-chlfiles<-list.ncs[filenames]
-varname<-"chlorophyll";  mnradius<- 1; sdradius<- 1; alt<-1
-chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
-modismean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius,alt=alt),fill=TRUE)
-
-obsdata$modis_new_mean<-rep(NA, length(obsdata[,1]))
-obsdata$modis_new_mean[modismean$X]<-modismean$chlorophyll_mean
-
-head(obsdata)
-range(obsdata$modis_new_mean, na.rm=T)
-
-rm(modismean); rm(chlfilesIn)
+    # get file names
+    filenames<-grep("erdMH1chlamday",list.ncs)
+    chlfiles<-list.ncs[filenames]
+    
+    varname<-"chlorophyll";  mnradius<- 1; sdradius<- 1; alt<-1
+    chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
+    
+    # extract 
+    modismean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,
+                                  ptsfile=obsdata,pt.radius=mnradius,alt=alt),
+                                  fill=TRUE)
+    
+    # add to obsdata
+    obsdata$modis_new_mean<-rep(NA, length(obsdata[,1]))
+    obsdata$modis_new_mean[modismean$X]<-modismean$chlorophyll_mean
+    
+    # preview results
+    head(obsdata)
+    range(obsdata$modis_new_mean, na.rm=T)
+    
+    # clean ws
+    rm(modismean); rm(chlfilesIn)
 
 }
 
 ```
 
+
+### VIIRS | Monthly
 ```{r, viirs-mday}
+
+# VIIRS Chl-a (Monthly from 1/2012 - 2/2024, 4km spatial res). Product in -180/180
 
 if('nesdisVHNSQchlaMonthly_' %in% params$envs){
 
-filenames<-grep("nesdisVHNSQchlaMonthly_",list.ncs)
-
-chlfiles<-list.ncs[filenames]
-varname<-"chlor_a";  mnradius<- 0.25; sdradius<- 1; alt<-1
-chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
-viirsmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,ptsfile=obsdata,pt.radius=mnradius,alt=alt),fill=TRUE)
-
-obsdata$viirs_new_mean<-rep(NA, length(obsdata[,1]))
-obsdata$viirs_new_mean[viirsmean$X]<-viirsmean$chlor_a_mean
-
-head(obsdata)
-range(obsdata$viirs_new_mean, na.rm=T)
-
-rm(viirsmean); rm(chlfilesIn)
+    # get file names
+    filenames<-grep("nesdisVHNSQchlaMonthly_",list.ncs)
+    
+    chlfiles<-list.ncs[filenames]
+    
+    varname<-"chlor_a";  mnradius<- 0.25; sdradius<- 1; alt<-1
+    chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
+    
+    # extract 
+    viirsmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,
+                                  ptsfile=obsdata,pt.radius=mnradius,alt=alt),
+                                  fill=TRUE)
+    
+    # add to obsdata
+    obsdata$viirs_new_mean<-rep(NA, length(obsdata[,1]))
+    obsdata$viirs_new_mean[viirsmean$X]<-viirsmean$chlor_a_mean
+    
+    # preview results
+    head(obsdata)
+    range(obsdata$viirs_new_mean, na.rm=T)
+    
+    # clean ws
+    rm(viirsmean); rm(chlfilesIn)
 
 }
 ```
 
+
+# CALC % MISSING DATA ----
 ```{r}
 print('% data missing: ')
 
 (colMeans(is.na(obsdata)))*100
 ```
 
+### FILL CHLA GAPS
 ```{r, fill-chlmday-gaps}
 
 
