@@ -103,7 +103,7 @@ pull_historic_metadata <- function(){
     
     ### Rename df cols -----
     # df_list <- lapply(df.list, setNames, col_names) # this works
-    df_list <- map(df.list, ~ rename_with(., ~ col_names)) # this also works!
+    df_list <- purrr::map(df.list, ~ rename_with(., ~ col_names)) # this also works! but need to specify purrr library (otherwise thinks its animotum)
     
     ### Merge meta dfs ----
     merged_meta_list <- lapply(df_list, format_df_cols) 
