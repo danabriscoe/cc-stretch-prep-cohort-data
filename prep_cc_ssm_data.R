@@ -15,7 +15,16 @@ source(here::here("R", "pull_historic_metadata.R"))
 
 ## Prep input data set -------
 tag_fpath <- file.path(here() %>% dirname(), 'cc-process-ssm', 'data', 'ssm_rw')
-flist = list.files(tag_fpath, pattern = ".csv",full.names = T, recursive = TRUE) # recursive grabs files from all sub directories (eg historic, cohort1)
+# flist = list.files(tag_fpath, pattern = ".csv",full.names = T, recursive = TRUE) # recursive grabs files from all sub directories (eg historic, cohort1)
+
+# List only the 'stretch' and 'historic' folders (not others like 'stretch12')
+subdirs <- list.dirs(tag_fpath, recursive = TRUE, full.names = TRUE)
+target_dirs <- subdirs[basename(subdirs) %in% c("stretch", "historic")]
+
+# Then, get all .csv files within those specific folders
+flist <- unlist(lapply(target_dirs, function(dir) {
+    list.files(dir, pattern = "\\.csv$", full.names = TRUE, recursive = TRUE)
+}))
 
 
 ## Read in tags -------
@@ -91,8 +100,14 @@ cohort2_data_w_names <- tag_df_split$cohort2 %>%
 # (do just for df consistency). have to run cohorts first in order to select same col names
 historic_data_wo_names <- tag_df_split$historic %>%
     left_join(., pull_historic_metadata(), by = "id", relationship = "many-to-many") %>%
-    dplyr::select(any_of(names(cohort1_data_w_names))) %>% add_ymd()
-
+    dplyr::select(any_of(names(cohort1_data_w_names))) %>% add_ymd() %>%
+    # add dummy cols to match stretch colnames
+    mutate(
+        turtle_num = id,
+        turtle_name = id
+    ) %>%
+    relocate(turtle_num, turtle_name, .before = "scl_cm")
+    
 
 
 ## Save indiv groups as .rds -----
