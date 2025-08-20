@@ -7,8 +7,8 @@ params:
     ncpath: "/Users/briscoedk/dbriscoe@stanford.edu - Google Drive/My Drive/ncdf"
     ftype: "rds"
     # ftype: "csv"
-    dataset: stretch
-    # dataset: historic
+    # dataset: stretch
+    dataset: historic
     # envs: !r c('sst_NOAA_DHW_monthly_Lon0360', 'multi-4km_P1M_CHL')
     # envs: !r c('hycom_uv', 'dhw_5km')
     envs: !r c('globtotal', 'hycom_uv', 'dhw_5km', 'multi-4km_P1M_CHL', 'multi-4km_P1D')
@@ -489,12 +489,12 @@ if('multi-4km_P1D' %in% params$envs){
                                        fill=TRUE)
     
     # add to obsdata
-    obsdata$globcolour_new_mean<-rep(NA, length(obsdata[,1]))
-    obsdata$globcolour_new_mean[globcolourmean$X]<-globcolourmean$CHL_mean
+    obsdata$globcolour_daily_new_mean<-rep(NA, length(obsdata[,1]))
+    obsdata$globcolour_daily_new_mean[globcolourmean$X]<-globcolourmean$CHL_mean
     
     # preview results
     head(obsdata)
-    range(obsdata$globcolour_new_mean, na.rm=T)
+    range(obsdata$globcolour_daily_new_mean, na.rm=T)
     
     # clean ws
     rm(globcolourmean); rm(chlfilesIn)
