@@ -11,7 +11,7 @@ params:
     # dataset: historic
     # envs: !r c('sst_NOAA_DHW_monthly_Lon0360', 'multi-4km_P1M_CHL')
     # envs: !r c('hycom_uv', 'dhw_5km')
-    envs: !r c('globtotal', 'hycom_uv', 'dhw_5km', 'multi-4km_P1M_CHL')
+    envs: !r c('globtotal', 'hycom_uv', 'dhw_5km', 'multi-4km_P1M_CHL', 'multi-4km_P1D')
     lon_range: !r tibble::tibble(min=-180, max=-110)
     # lon_range: 'NA'
 ---
@@ -224,6 +224,8 @@ if('dhw_5km' %in% params$envs){
 
 ## CRW DHW SST (Daily, 5km spatial res). Product is -180/180)
 
+## DKB NOTE: Jul 2025 -- No hay historic SSTA ncdf daily files. Will need to download in order to extract 
+
 if('dhw_5km' %in% params$envs){
     
     # get file names
@@ -434,6 +436,50 @@ if('multi-4km_P1M_CHL' %in% params$envs){
     chlfiles<-globcolour_list.ncs[filenames]
     
     varname<-"CHL";  mnradius<- 1; sdradius<- 1; alt<-1
+    chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
+    
+    # extract 
+    globcolourmean <- rbindlist(lapply(chlfilesIn,FUN=getvar,varname=varname,
+                                       ptsfile=obsdata,
+                                       pt.radius=mnradius,alt=alt),
+                                       fill=TRUE)
+    
+    # add to obsdata
+    obsdata$globcolour_new_mean<-rep(NA, length(obsdata[,1]))
+    obsdata$globcolour_new_mean[globcolourmean$X]<-globcolourmean$CHL_mean
+    
+    # preview results
+    head(obsdata)
+    range(obsdata$globcolour_new_mean, na.rm=T)
+    
+    # clean ws
+    rm(globcolourmean); rm(chlfilesIn)
+
+}
+)
+```
+
+### GlobColour | Daily
+```{r, globcolour-day, warning=FALSE}
+
+# Copernicus Global Ocean Colour (Monthly, 4km spatial res). Product in -180/180
+
+invisible(
+if('multi-4km_P1D' %in% params$envs){
+    
+    # get file names - note specis subfolder 
+    globcolour_list.ncs <- list.files(str_c(params$ncpath,
+                                            '/npac/cmems_globcolour_expanded_lats/extra_expansion'), 
+                                            full.names=T, recursive = T)
+    
+    # get file names
+    filenames<-grep("multi-4km_P1D",globcolour_list.ncs)
+    filenames<-grep("cmems_obs-oc_glo_bgc-plankton_my_l4-gapfree-multi-4km_P1D_CHL_",
+                     globcolour_list.ncs)
+
+    chlfiles<-globcolour_list.ncs[filenames]
+    
+    varname<-"CHL_daily";  mnradius<- 1; sdradius<- 1; alt<-1
     chlfilesIn <- getDateRangeX(inpts=obsdata,ncIn=chlfiles)
     
     # extract 
